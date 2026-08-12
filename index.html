@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CMaNGOS Character Importer</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #1a1a2e; color: #e0e0e0; min-height: 100vh;
+        display: flex; justify-content: center; align-items: flex-start; padding: 40px 20px;
+    }
+    .container {
+        background: #16213e; border-radius: 12px; padding: 32px;
+        max-width: 600px; width: 100%; box-shadow: 0 8px 32px rgba(0,0,0,.4);
+    }
+    h1 { text-align: center; margin-bottom: 8px; font-size: 1.5rem; color: #e94560; }
+    .subtitle { text-align: center; color: #888; font-size: 0.85rem; margin-bottom: 24px; }
+    label.section-label {
+        display: block; font-weight: 600; margin-bottom: 8px; color: #aaa;
+        font-size: 0.9rem; text-transform: uppercase; letter-spacing: .05em;
+    }
+    .file-input-wrap {
+        border: 2px dashed #444; border-radius: 8px; padding: 24px;
+        text-align: center; cursor: pointer; transition: border-color .2s; margin-bottom: 20px;
+    }
+    .file-input-wrap:hover { border-color: #e94560; }
+    .file-input-wrap input[type="file"] { display: none; }
+    .file-input-wrap .prompt { color: #999; }
+    .file-input-wrap .filename { color: #e94560; font-weight: 600; margin-top: 4px; }
+    .expansion-group { margin-bottom: 24px; }
+    .radio-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .radio-row label {
+        display: flex; align-items: center; gap: 6px; padding: 10px 16px;
+        background: #0f3460; border-radius: 8px; cursor: pointer; flex: 1; min-width: 120px;
+        transition: background .15s; border: 2px solid transparent;
+    }
+    .radio-row label:hover { background: #1a4a7a; }
+    .radio-row input:checked + span { font-weight: 600; color: #e94560; }
+    .radio-row input:checked ~ ..radio-row label { border-color: #e94560; }
+    .radio-row label.active { border-color: #e94560; background: #1a3a5c; }
+    .inferred-badge {
+        display: inline-block; font-size: 0.7rem; background: #e94560; color: #fff;
+        padding: 2px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle;
+    }
+    .btn {
+        display: block; width: 100%; padding: 14px; font-size: 1rem;
+        background: #e94560; color: #fff; border: none; border-radius: 8px;
+        cursor: pointer; font-weight: 600; transition: background .15s;
+    }
+    .btn:hover { background: #c73652; }
+    .btn:disabled { background: #555; cursor: not-allowed; }
+    .status { margin-top: 16px; padding: 12px; border-radius: 8px; font-size: 0.9rem; display: none; }
+    .status.success { display: block; background: #0a3d2e; color: #4ade80; }
+    .status.error   { display: block; background: #3d0a0a; color: #f87171; }
+    .status.info    { display: block; background: #0f3460; color: #60a5fa; }
+    .appearance-section,
+    .name-section {
+        margin-top: 20px; padding: 16px; background: #0d1b36;
+        border-radius: 8px; border: 1px solid #2a3f6e;
+    }
+    .appearance-help {
+        font-size: 0.85rem; color: #999; margin-bottom: 12px; line-height: 1.4;
+    }
+    .wowhead-link {
+        display: inline-block; padding: 8px 16px; background: #e94560; color: #fff;
+        border-radius: 6px; text-decoration: none; font-size: 0.85rem; font-weight: 600;
+        transition: background .15s; margin-bottom: 12px;
+    }
+    .wowhead-link:hover { background: #c73652; }
+    .hash-input {
+        width: 100%; background: #16213e; color: #e0e0e0; border: 1px solid #3a5a8c;
+        border-radius: 6px; padding: 10px 12px; font-size: 0.85rem; resize: vertical;
+        font-family: monospace;
+    }
+    .hash-input:focus { outline: none; border-color: #e94560; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>CMaNGOS Character Importer</h1>
+    <p class="subtitle">Convert exported WoW character JSON into importable CMaNGOS pdump SQL</p>
+    <p class="subtitle" style="margin-bottom:16px">Original developer: <strong>insuna</strong> &middot; Web port driven by <strong>qwen3.6:27b</strong></p>
+
+    <div class="file-input-wrap" id="dropzone">
+        <input type="file" id="fileInput" accept=".json">
+        <div class="prompt" id="filePrompt">Click or drag a character export JSON file here</div>
+        <div class="filename" id="fileName"></div>
+    </div>
+
+    <label class="section-label" for="expansionRadios">Target Expansion</label>
+    <div class="radio-row expansion-group" id="expansionRadios">
+        <label id="lbl0"><input type="radio" name="expansion" value="0"><span>Vanilla (1.12)</span></label>
+        <label id="lbl1"><input type="radio" name="expansion" value="1" checked><span>The Burning Crusade (2.4.3)</span></label>
+        <label id="lbl2"><input type="radio" name="expansion" value="2"><span>Wrath of the Lich King (3.3.5)</span></label>
+    </div>
+
+    <div class="name-section" id="nameSection" style="display:none">
+        <label class="section-label">Character Name</label>
+        <input class="hash-input" type="text" id="nameInput" maxlength="12" placeholder="Leave blank to keep original name">
+    </div>
+
+    <div class="appearance-section" id="appearanceSection" style="display:none">
+        <label class="section-label">Appearance</label>
+        <p class="appearance-help">Customize your character's look on Wowhead, then paste the URL back here.</p>
+        <a class="wowhead-link" id="wowheadLink" href="#" target="_blank" rel="noopener">Open Wowhead Dressing Room</a>
+        <textarea class="hash-input" id="hashInput" rows="2" placeholder="Paste wowhead URL or hash here (starts with #)"></textarea>
+    </div>
+
+    <div style="margin-top:16px">
+        <button class="btn" id="convertBtn" disabled>Convert</button>
+    </div>
+    <div class="status" id="status"></div>
+</div>
+
+<!-- Data files -->
+<script src="data/identity.js"></script>
+<script src="data/suffixes.js"></script>
+<script src="data/gems.js"></script>
+<script src="data/socketBonus.js"></script>
+<script src="data/skills.js"></script>
+<script src="data/talents.js"></script>
+<script src="data/glyphs.js"></script>
+<script src="data/professions.js"></script>
+
+<!-- Core logic -->
+<script src="js/template.js"></script>
+<script src="js/sqlTemplates.js"></script>
+<script src="js/expansionConfig.js"></script>
+<script src="js/wowhash.js"></script>
+<script src="js/items/normalizer.js"></script>
+<script src="js/items/enchantments.js"></script>
+<script src="js/items/assembly.js"></script>
+<script src="js/parsers/skills.js"></script>
+<script src="js/parsers/bags.js"></script>
+<script src="js/parsers/equipment.js"></script>
+<script src="js/parsers/pet.js"></script>
+<script src="js/parsers/spells.js"></script>
+<script src="js/parsers/talents.js"></script>
+<script src="js/parsers/actions.js"></script>
+<script src="js/parsers/factions.js"></script>
+<script src="js/parsers/quests.js"></script>
+<script src="js/parsers/glyphs.js"></script>
+<script src="js/parsers/achievements.js"></script>
+<script src="js/output.js"></script>
+<script src="js/parser.js"></script>
+
+<script>
+(function() {
+    const fileInput = document.getElementById("fileInput");
+    const dropzone  = document.getElementById("dropzone");
+    const fileName  = document.getElementById("fileName");
+    const filePrompt= document.getElementById("filePrompt");
+    const convertBtn= document.getElementById("convertBtn");
+    const statusDiv = document.getElementById("status");
+    const appearanceSection = document.getElementById("appearanceSection");
+    const wowheadLink = document.getElementById("wowheadLink");
+    const hashInput = document.getElementById("hashInput");
+    const nameSection = document.getElementById("nameSection");
+    const nameInput   = document.getElementById("nameInput");
+
+    let parsedJSON = null;
+
+    dropzone.addEventListener("click", () => fileInput.click());
+
+    dropzone.addEventListener("dragover", e => { e.preventDefault(); dropzone.style.borderColor = "#e94560"; });
+    dropzone.addEventListener("dragleave", () => { dropzone.style.borderColor = ""; });
+    dropzone.addEventListener("drop", e => {
+        e.preventDefault();
+        dropzone.style.borderColor = "";
+        const file = e.dataTransfer.files[0];
+        if (file) handleFile(file);
+    });
+
+    fileInput.addEventListener("change", () => {
+        if (fileInput.files[0]) handleFile(fileInput.files[0]);
+    });
+
+    function handleFile(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                parsedJSON = JSON.parse(e.target.result);
+                fileName.textContent = file.name;
+                filePrompt.textContent = "Loaded successfully";
+                convertBtn.disabled = false;
+                statusDiv.className = "status";
+                statusDiv.style.display = "none";
+
+                // Infer expansion from JSON data
+                const inferredExp = parsedJSON.player && parsedJSON.player.expansion !== undefined
+                    ? parseInt(parsedJSON.player.expansion) : null;
+
+                if (inferredExp !== null && [0, 1, 2].includes(inferredExp)) {
+                    const radio = document.querySelector(`input[name="expansion"][value="${inferredExp}"]`);
+                    if (radio) radio.checked = true;
+                    updateActiveLabel();
+
+                    // Mark inferred
+                    const badge = document.createElement("span");
+                    badge.className = "inferred-badge";
+                    badge.textContent = "inferred";
+                    const existingBadge = document.querySelector(".inferred-badge");
+                    if (existingBadge) existingBadge.remove();
+                    radio.parentElement.appendChild(badge);
+                }
+
+                // Show appearance customization with gear
+                if (parsedJSON.player) {
+                    const p = parsedJSON.player;
+                    appearanceSection.style.display = "block";
+
+                    // Map JSON equipment slots to wowhead slots 1-13
+                    const equip = parsedJSON.equipment || {};
+                    const gearSlots = {
+                        1: equip.head?.id || 0,        // Head
+                        2: equip.shoulder?.id || 0,    // Shoulder
+                        3: equip.back?.id || 0,        // Cloak/Back
+                        4: equip.chest?.id || 0,       // Chest
+                        5: equip.shirt?.id || 0,       // Shirt
+                        6: equip.tabard?.id || 0,      // Tabard
+                        7: equip.wrist?.id || 0,       // Wrist
+                        8: equip.hands?.id || 0,       // Hands
+                        9: equip.waist?.id || 0,       // Waist
+                        10: equip.legs?.id || 0,       // Legs
+                        11: equip.feet?.id || 0,       // Feet
+                        12: equip.main_hand?.id || 0,  // Main Hand
+                        13: equip.off_hand?.id || 0    // Off Hand
+                    };
+
+                    wowheadLink.href = buildWowheadURL(parsedJSON, gearSlots);
+
+                    // Show and populate name field
+                    nameSection.style.display = "block";
+                    nameInput.value = p.name || "";
+                }
+            } catch(err) {
+                showStatus("Failed to parse JSON: " + err.message, "error");
+                convertBtn.disabled = true;
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function updateActiveLabel() {
+        document.querySelectorAll(".radio-row label").forEach(l => l.classList.remove("active"));
+        const checked = document.querySelector('input[name="expansion"]:checked');
+        if (checked) checked.parentElement.classList.add("active");
+    }
+
+    document.querySelectorAll('input[name="expansion"]').forEach(radio => {
+        radio.addEventListener("change", () => {
+            updateActiveLabel();
+            const badge = document.querySelector(".inferred-badge");
+            if (badge) badge.remove();
+        });
+    });
+
+    convertBtn.addEventListener("click", () => {
+        if (!parsedJSON) return;
+        const expVal = parseInt(document.querySelector('input[name="expansion"]:checked').value);
+
+        try {
+            showStatus("Converting...", "info");
+            setTimeout(() => {
+                try {
+                    // Apply wowhash customization if pasted
+                    const hashText = hashInput.value.trim();
+                    if (hashText) {
+                        const bytes = wowhashToPlayerBytes(hashText);
+                        if (bytes) {
+                            parsedJSON.player._customPlayerBytes = bytes.playerBytes;
+                            parsedJSON.player._customPlayerBytes2 = bytes.playerBytes2;
+                        } else {
+                            showStatus("Could not decode appearance from pasted URL. Check browser console.", "error");
+                            return;
+                        }
+                    }
+
+                    // Apply custom name override if provided
+                    const customName = nameInput.value.trim();
+                    if (customName) {
+                        parsedJSON.player.name = customName;
+                    }
+
+                    const sql = parseFile(parsedJSON, expVal);
+                    const charName = parsedJSON.player.name || "character";
+                    const ts = new Date().toISOString().replace(/[:.]/g, "").slice(0, 15);
+                    downloadSQL(sql, `${charName}_${ts}.sql`);
+                    showStatus("Conversion complete! SQL file downloaded.", "success");
+                } catch(err) {
+                    showStatus("Conversion error: " + err.message, "error");
+                    console.error(err);
+                }
+            }, 50);
+        } catch(err) {
+            showStatus("Error: " + err.message, "error");
+        }
+    });
+
+    function showStatus(msg, type) {
+        statusDiv.textContent = msg;
+        statusDiv.className = "status " + type;
+    }
+
+    updateActiveLabel();
+})();
+</script>
+</body>
+</html>
