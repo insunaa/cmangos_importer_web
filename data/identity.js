@@ -40,7 +40,7 @@ const EQUIP_CACHE_SLOTS = [
 ];
 
 const slotMap = {
-    head: 0, neck: 1, shoulder: 2, chest: 4, waist: 5,
+    head: 0, neck: 1, shoulder: 2, shirt: 3, chest: 4, waist: 5,
     legs: 6, feet: 7, wrist: 8, hands: 9, finger1: 10,
     finger2: 11, trinket1: 12, trinket2: 13, back: 14,
     main_hand: 15, off_hand: 16, relic: 17, tabard: 18

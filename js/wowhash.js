@@ -4,18 +4,32 @@
 const _WH_ALPHA = "0zMcmVokRsaqbdrfwihuGINALpTjnyxtgevElBCDFHJKOPQSUWXYZ123456789";
 const _MAX_INDEX = 58;
 
-// Race-specific choiceId bases (appearance value 1 for each race)
-const _RACE_BASES = {
-    1:  [17214, 17226, 17241, 17260, 17270],  // Human
-    2:  [17327, 17338, 17347, 17355, 17363],  // Orc
-    3:  [17431, 17442, 17452, 17466, 17476],  // Dwarf
-    4:  [17521, 17530, 17539, 17546, 17554],  // Night Elf
-    5:  [17617, 17623, 17633, 17643, 17653],  // Undead
-    6:  [17703, 17714, 17718, 17725, 17728],  // Tauren
-    7:  [17771, 17778, 17785, 17792, 17801],  // Gnome
-    8:  [17855, 17870, 17876, 17881, 17891],  // Troll
-    10: [17962, 17978, 17988, 18003, 18013],  // Blood Elf
-    11: [18072, 18084, 18094, 18105, 18112]   // Draenei
+// Race-specific choiceId bases for female characters (appearance value 1)
+const _RACE_BASES_FEMALE = {
+    1:  [17214, 17226, 17241, 17260, 17270],
+    2:  [17327, 17338, 17347, 17355, 17363],
+    3:  [17431, 17442, 17452, 17466, 17476],
+    4:  [17521, 17530, 17539, 17546, 17554],
+    5:  [17617, 17623, 17633, 17643, 17653],
+    6:  [17703, 17714, 17718, 17725, 17728],
+    7:  [17771, 17778, 17785, 17792, 17801],
+    8:  [17855, 17870, 17876, 17881, 17891],
+    10: [17962, 17978, 17988, 18003, 18013],
+    11: [18072, 18084, 18094, 18105, 18112]
+};
+
+// Male bases - wowhead encodes male minimal choices as compressed zeros, not as longs.
+const _RACE_BASES_MALE = {
+    1:  [17159, 17171, 17183, 17195, 17205], // Human
+    2:  [17277, 17292, 17301, 17308, 17316], // Orc
+    3:  [17370, 17389, 17399, 17410, 17420], // Dwarf
+    4:  [17482, 17491, 17500, 17507, 17515], // Night Elf
+    5:  [17564, 17570, 17580, 17590, 17600], // Undead
+    6:  [17661, 17680, 17685, 17693, 17696], // Tauren
+    7:  [17733, 17740, 17747, 17754, 17763], // Gnome
+    8:  [17808, 17823, 17828, 17834, 17844], // Troll
+    10: [17905, 17921, 17931, 17942, 17952], // Blood Elf
+    11: [18024, 18038, 18048, 18057, 18064]  // Draenei
 };
 
 // === Encoding Functions (exact wowhead algorithm) ===
@@ -203,7 +217,7 @@ function buildCharacterData(json, gearSlots) {
 
     return {
         settings: {
-            race: p.race || "Human", gender: parseInt(p.gender) || 1, class: p.class || "warrior",
+            race: p.race || "Human", gender: parseInt(p.gender) ?? 1, class: p.class || "warrior",
             specialization: 0, level: parseInt(p.level) || 1, npcOptions: 0, pepe: 0, mount: 0,
             artifactMainHand: 0, artifactOffHand: 0, separateShoulders: 0
         },
@@ -236,9 +250,20 @@ function wowhashDecodeAppearance(hashStr) {
     const parts = stream.split("8");
     if (parts.length < 10) return null;
 
-    // Extract race from header
+    // Extract race + gender from header
+    // parts[0] = version char + race keyLong
+    // parts[1][0] = gender char (ALPHA index: 0=male, 1=female)
     const raceId = _decodeLong(parts[0].substring(1));
-    const bases = _RACE_BASES[raceId];
+    const isFemale = parts[1] && _WH_ALPHA.indexOf(parts[1][0]) === 1;
+
+    // Pick bases by gender - males default to base=-1 (except Blood Elf)
+    let bases;
+    if (isFemale) {
+        bases = _RACE_BASES_FEMALE[raceId];
+    } else {
+        bases = _RACE_BASES_MALE[raceId] || [-1, -1, -1, -1, -1];
+    }
+
     if (!bases) return null;
 
     // CustChoices start at index 3, step=2 (optionId, choiceId pairs)
